@@ -53,7 +53,7 @@ Your EDL password never goes in code, environment variables or git.
    That identity needs permission to:
    - create the bucket (`s3:CreateBucket`, unless it already exists), upload the layer zip (`s3:PutObject`) and publish it (`lambda:PublishLayerVersion`);
    - create and update the function (`lambda:CreateFunction`, `lambda:UpdateFunctionCode`, `lambda:UpdateFunctionConfiguration`, `lambda:InvokeFunction`);
-   - create the secret and the role (`secretsmanager:CreateSecret`, `iam:CreateRole`, `iam:PutRolePolicy`, `iam:AttachRolePolicy`, `iam:PassRole`);
+   - create the secret and the role (`secretsmanager:CreateSecret`, `secretsmanager:DescribeSecret`, `secretsmanager:PutSecretValue`, `iam:CreateRole`, `iam:PutRolePolicy`, `iam:AttachRolePolicy`, `iam:PassRole`);
    - read the function's logs (`logs:FilterLogEvents`).
 
    Then set the variables the remaining steps use:
@@ -99,8 +99,10 @@ Your EDL password never goes in code, environment variables or git.
 
 5. **Store the Earthdata login** in AWS Secrets Manager.
    Use the username and password you sign in to [Earthdata Login](https://urs.earthdata.nasa.gov/) with (step 1). [Forgot them?](https://urs.earthdata.nasa.gov/reset_passwords/new)
+   Enter your EDL **username** as shown on your [EDL profile](https://urs.earthdata.nasa.gov/profile), not your email address.
    The function reads a secret shaped like `{"username": "...", "password": "..."}`.
-   This prompts for the password so it stays out of your shell history, writes the JSON to a private temp file, and deletes the file afterwards:
+   This prompts for the password so it stays out of your shell history, writes the JSON to a private temp file, and deletes the file afterwards.
+   It creates the secret the first time and updates it when you run it again, e.g. to fix a typo or after changing your EDL password:
 
    ```bash
    read -rp "EDL username: " EDL_USER
@@ -109,8 +111,13 @@ Your EDL password never goes in code, environment variables or git.
    EDL_USER="$EDL_USER" EDL_PASS="$EDL_PASS" python3 -c \
      'import json, os; print(json.dumps({"username": os.environ["EDL_USER"], "password": os.environ["EDL_PASS"]}))' \
      > "$SECRET_FILE"
-   aws secretsmanager create-secret --region "$REGION" --name "$SECRET_NAME" \
-     --secret-string "file://$SECRET_FILE" --query ARN --output text
+   if aws secretsmanager describe-secret --region "$REGION" --secret-id "$SECRET_NAME" >/dev/null 2>&1; then
+     aws secretsmanager put-secret-value --region "$REGION" --secret-id "$SECRET_NAME" \
+       --secret-string "file://$SECRET_FILE" --query ARN --output text
+   else
+     aws secretsmanager create-secret --region "$REGION" --name "$SECRET_NAME" \
+       --secret-string "file://$SECRET_FILE" --query ARN --output text
+   fi
    rm -f "$SECRET_FILE"; unset EDL_PASS
    ```
 
@@ -174,7 +181,7 @@ Your EDL password never goes in code, environment variables or git.
 ## Updating
 
 - **Function code:** `function/test.sh && FUNCTION_NAME=$FUNCTION_NAME function/deploy.sh`
-- **EDL password:** rerun step 5 with `put-secret-value --secret-id "$SECRET_NAME"` in place of `create-secret --name "$SECRET_NAME"`.
+- **EDL password:** rerun step 5.
   Warm Lambda containers reuse their temporary S3 credentials for up to an hour, so the new password is picked up within an hour.
 - **Layer:** rerun step 4 (with the next tag, e.g. `layer-v2`), then point the function at the new version:
 
