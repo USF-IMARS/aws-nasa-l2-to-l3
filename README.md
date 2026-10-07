@@ -67,26 +67,38 @@ Your EDL password never goes in code, environment variables or git.
    FUNCTION_NAME=l2-to-l3
    ```
 
-3. **Bucket.** Skip this if the bucket already exists:
+3. **Bucket.** Bucket names are global across all AWS accounts, so first check who owns the name:
 
    ```bash
-   aws s3 mb "s3://$OUTPUT_BUCKET" --region "$REGION"
+   aws s3api head-bucket --bucket "$OUTPUT_BUCKET"
    ```
+
+   - Succeeds (prints the bucket's region, or nothing on older CLIs): the bucket is yours. Skip to step 4.
+   - `404 Not Found`: the name is free. Create it:
+
+     ```bash
+     aws s3 mb "s3://$OUTPUT_BUCKET" --region "$REGION"
+     ```
+   - `403 Forbidden`: another AWS account owns that name. Pick a different `OUTPUT_BUCKET` (e.g. add your account ID) and check again.
 
 4. **Build, test and publish the layer.** The first build takes about 15 minutes.
 
    ```bash
-   layer/build.sh && layer/test.sh
-   aws s3 cp layer/dist/gdal-python3.12-x86_64.zip "s3://$OUTPUT_BUCKET/layers/" --region "$REGION"
+   layer/build.sh && layer/test.sh &&
+   aws s3 cp layer/dist/gdal-python3.12-x86_64.zip "s3://$OUTPUT_BUCKET/layers/" --region "$REGION" &&
    LAYER_ARN=$(aws lambda publish-layer-version --region "$REGION" \
      --layer-name gdal-python312 \
      --content "S3Bucket=$OUTPUT_BUCKET,S3Key=layers/gdal-python3.12-x86_64.zip" \
      --compatible-runtimes python3.12 --compatible-architectures x86_64 \
-     --query LayerVersionArn --output text)
-   git tag -a layer-v1 -m "GDAL 3.13.3, $LAYER_ARN"
+     --query LayerVersionArn --output text) &&
+   git tag -a layer-v1 -m "GDAL 3.13.3, $LAYER_ARN" &&
+   echo "Published $LAYER_ARN"
    ```
 
+   The `&&`s stop at the first failure, so a failed upload can't leave a tag without a layer ARN.
+
 5. **Store the Earthdata login** in AWS Secrets Manager.
+   Use the username and password you sign in to [Earthdata Login](https://urs.earthdata.nasa.gov/) with (step 1). [Forgot them?](https://urs.earthdata.nasa.gov/reset_passwords/new)
    The function reads a secret shaped like `{"username": "...", "password": "..."}`.
    This prompts for the password so it stays out of your shell history, writes the JSON to a private temp file, and deletes the file afterwards:
 
