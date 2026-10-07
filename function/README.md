@@ -41,6 +41,7 @@ Without it, the function composites the most recent complete period, which suits
 
 The execution role needs `secretsmanager:GetSecretValue` on the secret and `s3:PutObject` on the output bucket, plus the usual CloudWatch Logs permissions.
 Reads from `ob-cumulus-prod-public` use the Earthdata credentials, not the role.
+See [Deploy](../README.md#deploy-first-time) in the top-level README to set up Earthdata Login, the secret and the role.
 
 ## Test
 
@@ -55,3 +56,5 @@ This needs the layer zip built first (`../layer/build.sh`).
 ```bash
 FUNCTION_NAME=l2-to-l3 ./deploy.sh   # updates the code of an existing function
 ```
+
+To create the function the first time, follow [Deploy](../README.md#deploy-first-time) in the top-level README.
