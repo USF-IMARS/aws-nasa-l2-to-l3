@@ -22,6 +22,7 @@ ARG GDAL_VERSION=3.13.3
 ARG PROJ_VERSION=9.9.0
 ARG HDF5_VERSION=1.14.6
 ARG NETCDF_VERSION=4.9.3
+ARG NUMPY_VERSION=2.5.3
 
 ENV PREFIX=/opt
 ENV PKG_CONFIG_PATH=/opt/lib/pkgconfig \
@@ -79,10 +80,10 @@ RUN curl -fsSL https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/
 
 # --- Python bindings -> /opt/python -----------------------------------------
 # numpy is needed both at build time and at runtime for osgeo.gdal_array.
-RUN pip install --no-cache-dir setuptools wheel numpy \
+RUN pip install --no-cache-dir setuptools wheel "numpy==${NUMPY_VERSION}" \
     && pip install --no-cache-dir --no-build-isolation --no-binary gdal \
         --target $PREFIX/python "gdal==${GDAL_VERSION}" \
-    && pip install --no-cache-dir --target $PREFIX/python numpy
+    && pip install --no-cache-dir --target $PREFIX/python "numpy==${NUMPY_VERSION}"
 
 # --- Bundle system libraries the bare Lambda runtime does not provide -------
 COPY --from=runtime-libs /runtime-libs.txt /runtime-libs.txt

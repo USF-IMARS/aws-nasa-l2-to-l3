@@ -1,0 +1,2 @@
+# Function-only dependencies.
+# Do NOT list numpy or gdal: both come from the GDAL layer (../layer).
