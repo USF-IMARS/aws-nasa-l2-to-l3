@@ -2,10 +2,10 @@
 
 A Python Lambda function that processes Level-2 data into Level-3 products, plus the GDAL layer it runs on.
 
-| Folder | What it is | How often it changes |
-|---|---|---|
-| [`layer/`](layer/) | Lambda layer with GDAL, PROJ, GEOS, HDF5, NetCDF and numpy, built from source with Docker | Rarely. The build is slow. |
-| [`function/`](function/) | The L2 → L3 processing code (`l2_to_l3` package) | Often. Deploys are fast. |
+| Folder                   | What it is                                                                                | How often it changes       |
+|--------------------------|-------------------------------------------------------------------------------------------|----------------------------|
+| [`layer/`](layer/)       | Lambda layer with GDAL, PROJ, GEOS, HDF5, NetCDF and numpy, built from source with Docker | Rarely. The build is slow. |
+| [`function/`](function/) | The L2 → L3 processing code (`l2_to_l3` package)                                          | Often. Deploys are fast.   |
 
 The two live in one repo because the function only works with this exact layer: python3.12, x86_64, with numpy and GDAL coming from the layer.
 Change them together in one commit when they need to move together, and otherwise build and deploy each on its own.
@@ -27,11 +27,11 @@ You need Docker with buildx and the AWS CLI.
 
 Three sets of credentials are involved:
 
-| Credential | Used for | Where it lives |
-|---|---|---|
-| **Earthdata Login (EDL)** user/pass | Getting temporary S3 credentials for NASA's bucket | A Secrets Manager secret (step 5) |
-| **Your AWS credentials** | Publishing the layer, creating and deploying the function | AWS CLI profile (step 2) |
-| **Lambda execution role** | What the function may do in AWS: read the EDL secret, write composites and logs | An IAM role attached to the function (step 6) |
+| Credential                          | Used for                                                                        | Where it lives                                |
+|-------------------------------------|---------------------------------------------------------------------------------|-----------------------------------------------|
+| **Earthdata Login (EDL)** user/pass | Getting temporary S3 credentials for NASA's bucket                              | A Secrets Manager secret (step 5)             |
+| **Your AWS credentials**            | Publishing the layer, creating and deploying the function                       | AWS CLI profile (step 2)                      |
+| **Lambda execution role**           | What the function may do in AWS: read the EDL secret, write composites and logs | An IAM role attached to the function (step 6) |
 
 Your EDL password never goes in code, environment variables or git.
 
@@ -173,11 +173,15 @@ Your EDL password never goes in code, environment variables or git.
 
 ## Troubleshooting
 
-| Symptom | Likely cause |
-|---|---|
-| `HTTP Error 401: Unauthorized` while fetching S3 credentials | Wrong EDL username/password in the secret, or the OB.DAAC application isn't authorized in your EDL profile (deploy step 1) |
-| `HTTP ERROR 502` in the browser right after logging in to EDL | A failure on OB.DAAC's side when EDL sends you back. Retry in a private window (stale `obdaac-tea` cookies). Check whether another DAAC's `/s3credentials` works for the same account (e.g. <https://archive.podaac.earthdata.nasa.gov/s3credentials>). If only OB.DAAC fails, report it to OB.DAAC on the [Earthdata Forum](https://forum.earthdata.nasa.gov/). |
-| `AccessDenied` on `GetSecretValue` | The role policy's secret ARN doesn't match, e.g. a different `SECRET_NAME` or region |
-| `403 Forbidden` downloading a granule | The function isn't running in us-west-2, or the temporary credentials expired |
-| `Anonymous users cannot invoke requests against Requester Pays buckets` | The request was sent without the Earthdata temporary credentials |
-| `AccessDenied` on `PutObject` | The output bucket or prefix doesn't match the role policy |
+| Symptom                                                                 | Likely cause                                                                                                               |
+|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| `HTTP Error 401: Unauthorized` while fetching S3 credentials            | Wrong EDL username/password in the secret, or the OB.DAAC application isn't authorized in your EDL profile (deploy step 1) |
+| `HTTP ERROR 502` in the browser right after logging in to EDL           | A failure on OB.DAAC's side when EDL sends you back; see below                                                             |
+| `AccessDenied` on `GetSecretValue`                                      | The role policy's secret ARN doesn't match, e.g. a different `SECRET_NAME` or region                                       |
+| `403 Forbidden` downloading a granule                                   | The function isn't running in us-west-2, or the temporary credentials expired                                              |
+| `Anonymous users cannot invoke requests against Requester Pays buckets` | The request was sent without the Earthdata temporary credentials                                                           |
+| `AccessDenied` on `PutObject`                                           | The output bucket or prefix doesn't match the role policy                                                                  |
+
+For the 502: retry in a private window, since stale `obdaac-tea` cookies can cause it.
+Then check whether another DAAC's credentials page works for the same account, e.g. <https://archive.podaac.earthdata.nasa.gov/s3credentials>.
+If only OB.DAAC fails, report it to OB.DAAC on the [Earthdata Forum](https://forum.earthdata.nasa.gov/).
