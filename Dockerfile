@@ -1,30 +1,27 @@
 # Builds an AWS Lambda layer containing GDAL (+ PROJ, GEOS, HDF5, NetCDF) and
-# the GDAL Python bindings (osgeo), for the Amazon Linux 2023 Python runtimes.
+# the GDAL Python bindings (osgeo), for the python3.12 Lambda runtime (x86_64).
 #
 # Everything is installed under /opt, which is where Lambda mounts layers, so
 # no environment variables are needed at runtime: /opt/lib is already on
 # LD_LIBRARY_PATH, /opt/python is on sys.path, and GDAL/PROJ find their data
 # files through their compiled-in /opt/share paths.
 
-ARG PYTHON_VERSION=3.12
-
 # ---------------------------------------------------------------------------
 # Snapshot of the shared libraries already present in the bare Lambda runtime,
 # so the builder knows which dependencies it must bundle into the layer.
 # ---------------------------------------------------------------------------
-FROM public.ecr.aws/lambda/python:${PYTHON_VERSION} AS runtime-libs
+FROM public.ecr.aws/lambda/python:3.12 AS runtime-libs
 # (The base image has no `find`, so use a shell glob.)
 RUN for f in /usr/lib64/*.so* /var/lang/lib/*.so*; do echo "${f##*/}"; done | sort -u > /runtime-libs.txt \
     && grep -qx 'libc.so.6' /runtime-libs.txt
 
 # ---------------------------------------------------------------------------
-FROM public.ecr.aws/lambda/python:${PYTHON_VERSION} AS builder
+FROM public.ecr.aws/lambda/python:3.12 AS builder
 
 ARG GDAL_VERSION=3.13.3
 ARG PROJ_VERSION=9.9.0
 ARG HDF5_VERSION=1.14.6
 ARG NETCDF_VERSION=4.9.3
-ARG INCLUDE_NUMPY=true
 
 ENV PREFIX=/opt
 ENV PKG_CONFIG_PATH=/opt/lib/pkgconfig \
@@ -81,14 +78,11 @@ RUN curl -fsSL https://github.com/OSGeo/gdal/releases/download/v${GDAL_VERSION}/
     && rm -rf gdal-*
 
 # --- Python bindings -> /opt/python -----------------------------------------
-# numpy is needed at build time for osgeo.gdal_array; it is only shipped in the
-# layer when INCLUDE_NUMPY=true (set false if your function bundles its own).
+# numpy is needed both at build time and at runtime for osgeo.gdal_array.
 RUN pip install --no-cache-dir setuptools wheel numpy \
     && pip install --no-cache-dir --no-build-isolation --no-binary gdal \
         --target $PREFIX/python "gdal==${GDAL_VERSION}" \
-    && if [ "$INCLUDE_NUMPY" = "true" ]; then \
-         pip install --no-cache-dir --target $PREFIX/python numpy; \
-       fi
+    && pip install --no-cache-dir --target $PREFIX/python numpy
 
 # --- Bundle system libraries the bare Lambda runtime does not provide -------
 COPY --from=runtime-libs /runtime-libs.txt /runtime-libs.txt
