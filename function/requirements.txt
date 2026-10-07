@@ -1,2 +1,2 @@
-# Function-only dependencies.
+# Function-only dependencies (none yet: boto3 ships with the Lambda runtime).
 # Do NOT list numpy or gdal: both come from the GDAL layer (../layer).
